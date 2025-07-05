@@ -98,6 +98,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 from app.routes import daily_quests
 from app.routes.badges import router as badges_router 
 from app.routes.activity_log import router as activity_log_router
+from app.routes.virtual_pet import router as virtual_pet_router
 
 app.include_router(quests.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
@@ -108,6 +109,7 @@ app.include_router(daily_quests.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
 app.include_router(badges_router, prefix="/api")
 app.include_router(activity_log_router, prefix="/api")
+app.include_router(virtual_pet_router, prefix="/api")
 
 @app.get("/")
 async def root():

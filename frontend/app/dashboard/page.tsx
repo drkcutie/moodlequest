@@ -15,14 +15,24 @@ import {
   type StudentProgress,
   type UserStreak,
 } from "@/lib/api-client";
+import {
+  checkUserHasPet,
+  getUserPet,
+  createUserPet,
+} from "@/lib/virtual-pet-api";
 import { getLevelInfo } from "@/lib/leveling-system";
 import { Flame } from "lucide-react";
+import { PetOnboardingModal } from "@/components/dashboard/pet-onboarding-modal";
+import { useGlobalXPReward } from "@/contexts/xp-reward-context";
 
 export default function DashboardPage() {
   // Protect this route for students - teachers will be redirected to /teacher/dashboard
   useStudentProtection("/teacher/dashboard");
   const { user, loading: userLoading } = useCurrentUser();
-  // console.log("Current user:", user);
+
+  // XP Reward context for managing onboarding conflicts
+  const { setOnboardingInProgress, isOnboardingInProgress } =
+    useGlobalXPReward();
 
   // Initialize daily login quest auto-completion
   useDailyLoginQuest();
@@ -33,6 +43,31 @@ export default function DashboardPage() {
   const [progressError, setProgressError] = useState<string | null>(null);
   const [userStreak, setUserStreak] = useState<UserStreak | null>(null);
   const [streakLoading, setStreakLoading] = useState(true);
+  const [hasPet, setHasPet] = useState<boolean>(false);
+  const [petCheckLoading, setPetCheckLoading] = useState(true); // Start as true to show loading initially
+  const [petCreationLoading, setPetCreationLoading] = useState(false);
+
+  // Debug logging
+  useEffect(() => {
+    console.log("Dashboard - User state:", {
+      user: user?.username,
+      userLoading,
+      hasPet,
+      petCheckLoading,
+      isOnboardingInProgress,
+    });
+  }, [user, userLoading, hasPet, petCheckLoading, isOnboardingInProgress]);
+
+  // Debug logging for onboarding state
+  useEffect(() => {
+    console.log("Dashboard onboarding state changed:", {
+      isOnboardingInProgress,
+      hasPet,
+      petCheckLoading,
+      userLoading,
+      userId: user?.id,
+    });
+  }, [isOnboardingInProgress, hasPet, petCheckLoading, userLoading, user?.id]);
 
   // Fetch student progress data
   useEffect(() => {
@@ -93,6 +128,64 @@ export default function DashboardPage() {
       fetchStreak();
     }
   }, [user, userLoading]);
+
+  // Check if user has a pet using the new stepwise approach
+  useEffect(() => {
+    const checkPet = async () => {
+      if (!user?.id) {
+        setPetCheckLoading(false);
+        setHasPet(false);
+        return;
+      }
+
+      try {
+        setPetCheckLoading(true);
+        console.log("Checking pet status for user:", user.username);
+
+        // Step 1: Check if user has a pet
+        const checkResponse = await checkUserHasPet();
+        console.log("Pet check response:", checkResponse);
+
+        if (!checkResponse.success) {
+          console.error("Failed to check pet status:", checkResponse.message);
+          setHasPet(false);
+          return;
+        }
+
+        const hasPetStatus = checkResponse.data?.has_pet || false;
+        setHasPet(hasPetStatus);
+
+        if (hasPetStatus) {
+          console.log(
+            "User has a pet, will load it when VirtualPet component mounts"
+          );
+          // User has a pet, no onboarding needed
+          setOnboardingInProgress(false);
+        } else {
+          console.log("User does not have a pet, will show onboarding");
+          // User needs onboarding, delay XP rewards
+          setOnboardingInProgress(true);
+        }
+      } catch (error) {
+        console.error("Failed to check pet status:", error);
+        setHasPet(false);
+        // On error, don't block XP rewards
+        setOnboardingInProgress(false);
+      } finally {
+        setPetCheckLoading(false);
+      }
+    };
+
+    // Run pet check whenever we have a user, regardless of loading state
+    if (user?.id) {
+      checkPet();
+    } else if (!userLoading) {
+      // If no user and not loading, clear the pet state
+      setPetCheckLoading(false);
+      setHasPet(false);
+      setOnboardingInProgress(false);
+    }
+  }, [user?.id, userLoading]); // Changed dependency to user?.id to trigger on user change
   // Get comprehensive level information using the leveling system
   const levelInfo = getLevelInfo(studentProgress?.total_exp || 0);
 
@@ -282,7 +375,63 @@ export default function DashboardPage() {
           >
             <div className="p-6">
               <h2 className="text-2xl font-semibold mb-4">Your Pet</h2>
-              <VirtualPet />
+              {petCheckLoading ? (
+                <p className="text-muted-foreground">
+                  Checking for your pet...
+                </p>
+              ) : hasPet ? (
+                <>
+                  {/* <p className="text-xs text-green-600 mb-2">✓ Pet found</p> */}
+                  <VirtualPet />
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-blue-600 mb-2">
+                    No pet found - showing onboarding
+                  </p>
+                  <PetOnboardingModal
+                    isOpen={true}
+                    onClose={() => {}}
+                    onCreatePet={async (name: string, species: string) => {
+                      setPetCreationLoading(true);
+                      try {
+                        console.log("Creating pet:", name, species);
+                        const result = await createUserPet(name, species);
+                        console.log("Pet creation result:", result);
+                        if (result.success) {
+                          // Re-check pet status after creation to confirm
+                          const checkResponse = await checkUserHasPet();
+                          if (
+                            checkResponse.success &&
+                            checkResponse.data?.has_pet
+                          ) {
+                            setHasPet(true);
+                            // Mark onboarding as complete - this will trigger queued XP rewards
+                            setOnboardingInProgress(false);
+                            console.log(
+                              "Pet created and verified successfully! Onboarding complete."
+                            );
+                          } else {
+                            console.error(
+                              "Pet creation succeeded but verification failed"
+                            );
+                          }
+                        } else {
+                          console.error(
+                            "Failed to create pet:",
+                            result.message
+                          );
+                        }
+                      } catch (error) {
+                        console.error("Error creating pet:", error);
+                      } finally {
+                        setPetCreationLoading(false);
+                      }
+                    }}
+                    isLoading={petCreationLoading}
+                  />
+                </>
+              )}
             </div>
           </motion.div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { useAppToast } from "@/hooks/use-react-hot-toast";
 import {
   Card,
   CardContent,
@@ -16,7 +17,7 @@ import type {
   VirtualPet as VirtualPetType,
   PetAccessory,
 } from "@/types/gamification";
-import { Heart, Zap, Clock, Plus, Lock, Edit2, Check } from "lucide-react";
+import { Heart, Zap, Clock, Plus, Lock, Edit2, Check, X } from "lucide-react";
 import Image from "next/image";
 import {
   Dialog,
@@ -28,6 +29,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getMyPet, VirtualPetData, updatePetName } from "@/lib/virtual-pet-api";
 
 // Mock pet accessories
 const availableAccessories: PetAccessory[] = [
@@ -131,7 +133,13 @@ const mockPet: VirtualPetType = {
 };
 
 export function VirtualPet() {
-  const [pet, setPet] = useState<VirtualPetType>(mockPet);
+  const { success, error: showError } = useAppToast();
+  
+  // State for loading and error handling
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pet, setPet] = useState<VirtualPetType | null>(null);
+
   const [activeTab, setActiveTab] = useState("interact");
   const [showAccessories, setShowAccessories] = useState(false);
   const [petState, setPetState] = useState<
@@ -140,10 +148,70 @@ export function VirtualPet() {
   const [isFeeding, setIsFeeding] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
-  const [newPetName, setNewPetName] = useState(pet.name);
+  const [isUpdatingName, setIsUpdatingName] = useState(false);
+  const [newPetName, setNewPetName] = useState("");
   const userActivityTimeout = useRef<NodeJS.Timeout | null>(null);
   const feedingTimeout = useRef<NodeJS.Timeout | null>(null);
   const playingTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  // Helper function to convert backend pet data to frontend format
+  const convertBackendPetToFrontend = (
+    backendPet: VirtualPetData
+  ): VirtualPetType => {
+    return {
+      id: backendPet.pet_id.toString(),
+      name: backendPet.name,
+      species: backendPet.species,
+      level: 1, // Default level since backend doesn't have this
+      experience: 0, // Default experience since backend doesn't have this
+      experienceToNextLevel: 100, // Default next level requirement
+      happiness: backendPet.happiness,
+      energy: backendPet.energy,
+      lastFed: backendPet.last_fed,
+      lastPlayed: backendPet.last_played,
+      accessories: backendPet.accessories || [], // Use backend accessories or empty array
+      iconUrl: "/animations/Chilling.gif", // Default animation
+    };
+  };
+
+  // Fetch pet data from API
+  useEffect(() => {
+    const fetchPetData = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        console.log("VirtualPet: Fetching pet data from API...");
+        const response = await getMyPet();
+
+        console.log("VirtualPet: API response:", response);
+
+        if (response.success && response.has_pet && response.pet) {
+          // Convert backend pet data to frontend format
+          const frontendPet = convertBackendPetToFrontend(response.pet);
+          setPet(frontendPet);
+          setNewPetName(frontendPet.name);
+          console.log("VirtualPet: Successfully loaded pet:", frontendPet);
+        } else if (response.success && !response.has_pet) {
+          // User doesn't have a pet - this component shouldn't be shown
+          console.log("VirtualPet: No pet found for user");
+          setError("No pet found. Please create a pet first.");
+        } else {
+          console.error("VirtualPet: Failed to fetch pet:", response.message);
+          setError(response.message || "Failed to load pet data");
+        }
+      } catch (err) {
+        console.error("VirtualPet: Error fetching pet:", err);
+        setError(
+          err instanceof Error ? err.message : "Failed to load pet data"
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchPetData();
+  }, []);
 
   // Calculate time since last interaction
   const getTimeSince = (dateString: string) => {
@@ -162,18 +230,21 @@ export function VirtualPet() {
   };
   // Handle Feed Pet button click
   const handleFeedClick = () => {
-    if (pet.energy >= 100) return; // Don't feed if energy is full
+    if (!pet || pet.energy >= 100) return; // Don't feed if energy is full or no pet
 
     setIsFeeding(true);
     const previousState = petState;
 
     // Update pet stats
-    setPet((prevPet) => ({
-      ...prevPet,
-      energy: Math.min(100, prevPet.energy + 20),
-      lastFed: new Date().toISOString(),
-      experience: prevPet.experience + 15, // Gain experience when feeding
-    }));
+    setPet((prevPet) => {
+      if (!prevPet) return prevPet;
+      return {
+        ...prevPet,
+        energy: Math.min(100, prevPet.energy + 20),
+        lastFed: new Date().toISOString(),
+        experience: prevPet.experience + 15, // Gain experience when feeding
+      };
+    });
 
     // Clear any existing timeout
     if (feedingTimeout.current) {
@@ -189,19 +260,22 @@ export function VirtualPet() {
   };
   // Handle Play button click
   const handlePlayClick = () => {
-    if (pet.energy <= 0) return; // Don't play if no energy
+    if (!pet || pet.energy <= 0) return; // Don't play if no energy or no pet
 
     setIsPlaying(true);
     const previousState = petState;
 
     // Update pet stats
-    setPet((prevPet) => ({
-      ...prevPet,
-      happiness: Math.min(100, prevPet.happiness + 15),
-      energy: Math.max(0, prevPet.energy - 10),
-      lastPlayed: new Date().toISOString(),
-      experience: prevPet.experience + 25, // Gain more experience when playing
-    }));
+    setPet((prevPet) => {
+      if (!prevPet) return prevPet;
+      return {
+        ...prevPet,
+        happiness: Math.min(100, prevPet.happiness + 15),
+        energy: Math.max(0, prevPet.energy - 10),
+        lastPlayed: new Date().toISOString(),
+        experience: prevPet.experience + 25, // Gain more experience when playing
+      };
+    });
 
     // Clear any existing timeout
     if (playingTimeout.current) {
@@ -217,25 +291,67 @@ export function VirtualPet() {
   };
 
   // Handle saving the pet name
-  const handleSaveName = () => {
-    if (newPetName.trim()) {
-      setPet((prevPet) => ({
-        ...prevPet,
-        name: newPetName.trim(),
-      }));
-    } else {
+  const handleSaveName = async () => {
+    if (!pet) return;
+
+    if (!newPetName.trim()) {
       // If empty, revert to current name
       setNewPetName(pet.name);
+      setIsEditingName(false);
+      return;
     }
-    setIsEditingName(false);
+
+    // Don't update if name hasn't changed
+    if (newPetName.trim() === pet.name) {
+      setIsEditingName(false);
+      return;
+    }
+
+    try {
+      setIsUpdatingName(true);
+      console.log("Updating pet name from", pet.name, "to", newPetName.trim());
+
+      const response = await updatePetName(newPetName.trim());
+
+      if (response.success && response.pet) {
+        // Update the pet state with the new name from the API response
+        setPet((prevPet) => {
+          if (!prevPet) return prevPet;
+          return {
+            ...prevPet,
+            name: response.pet!.name, // Use the name from the API response
+          };
+        });
+        
+        console.log("Pet name updated successfully to:", response.pet.name);
+        success(`Pet name updated to "${response.pet.name}"`);
+        setIsEditingName(false);
+      } else {
+        console.error("Failed to update pet name:", response.message);
+        // Revert to original name on failure
+        setNewPetName(pet.name);
+        showError(`Failed to update pet name: ${response.message}`);
+      }
+    } catch (error) {
+      console.error("Error updating pet name:", error);
+      // Revert to original name on error
+      setNewPetName(pet.name);
+      showError("Failed to update pet name. Please try again.");
+    } finally {
+      setIsUpdatingName(false);
+    }
   };
 
   const equipAccessory = (accessory: PetAccessory) => {
+    if (!pet) return;
+
     // Check if the pet level is high enough to use this accessory
     if (pet.level < accessory.levelRequired) {
       return; // Can't equip if level requirement isn't met
     }
     setPet((prevPet) => {
+      if (!prevPet) return prevPet;
+
       // Check if accessory is already equipped
       const isEquipped = prevPet.accessories.some(
         (acc) => acc.id === accessory.id
@@ -263,6 +379,8 @@ export function VirtualPet() {
 
   // Determine the appropriate pet state based on current conditions
   const updatePetState = () => {
+    if (!pet) return;
+
     if (pet.energy <= 0) {
       setPetState("dead");
     } else if (pet.happiness <= 10) {
@@ -279,6 +397,7 @@ export function VirtualPet() {
 
   // Helper to calculate levels needed to unlock an accessory
   const getLevelsNeeded = (accessory: PetAccessory) => {
+    if (!pet) return accessory.levelRequired;
     return Math.max(0, accessory.levelRequired - pet.level);
   };
 
@@ -336,11 +455,15 @@ export function VirtualPet() {
 
   // Update pet state whenever pet stats change
   useEffect(() => {
-    updatePetState();
-  }, [pet.happiness, pet.energy]);
+    if (pet) {
+      updatePetState();
+    }
+  }, [pet?.happiness, pet?.energy]);
 
   // Check for level up when experience changes
   useEffect(() => {
+    if (!pet) return;
+
     if (pet.experience >= pet.experienceToNextLevel) {
       // Level up the pet
       const newLevel = pet.level + 1;
@@ -349,29 +472,35 @@ export function VirtualPet() {
       // Calculate experience needed for next level (increases with each level)
       const newExpRequired = Math.floor(pet.experienceToNextLevel * 1.2);
 
-      setPet((prevPet) => ({
-        ...prevPet,
-        level: newLevel,
-        experience: remainingExp,
-        experienceToNextLevel: newExpRequired,
-        // Bonus happiness and energy for leveling up
-        happiness: Math.min(100, prevPet.happiness + 20),
-        energy: Math.min(100, prevPet.energy + 20),
-      }));
+      setPet((prevPet) => {
+        if (!prevPet) return prevPet;
+        return {
+          ...prevPet,
+          level: newLevel,
+          experience: remainingExp,
+          experienceToNextLevel: newExpRequired,
+          // Bonus happiness and energy for leveling up
+          happiness: Math.min(100, prevPet.happiness + 20),
+          energy: Math.min(100, prevPet.energy + 20),
+        };
+      });
 
       // Could add a level up animation or notification here
       console.log(`${pet.name} leveled up to level ${newLevel}!`);
     }
-  }, [pet.experience]);
+  }, [pet?.experience]);
 
   // Simulate pet stats decreasing over time
   useEffect(() => {
     const interval = setInterval(() => {
-      setPet((prevPet) => ({
-        ...prevPet,
-        happiness: Math.max(0, prevPet.happiness - 1),
-        energy: Math.max(0, prevPet.energy - 0.5),
-      }));
+      setPet((prevPet) => {
+        if (!prevPet) return prevPet;
+        return {
+          ...prevPet,
+          happiness: Math.max(0, prevPet.happiness - 1),
+          energy: Math.max(0, prevPet.energy - 0.5),
+        };
+      });
     }, 60000); // Update every minute
 
     return () => clearInterval(interval);
@@ -404,6 +533,48 @@ export function VirtualPet() {
         return "/animations/Chilling.gif";
     }
   };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Virtual Pet</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading your pet...</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Show error state
+  if (error || !pet) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Virtual Pet</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <p className="text-red-600 mb-4">
+                {error || "Failed to load pet"}
+              </p>
+              <Button onClick={() => window.location.reload()}>
+                Try Again
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -532,21 +703,47 @@ export function VirtualPet() {
                   onChange={(e) => setNewPetName(e.target.value)}
                   className="h-8 px-2 py-1 w-32 text-center font-bold"
                   autoFocus
-                  onKeyDown={(e) => e.key === "Enter" && handleSaveName()}
+                  disabled={isUpdatingName}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !isUpdatingName) {
+                      handleSaveName();
+                    } else if (e.key === "Escape") {
+                      setNewPetName(pet.name);
+                      setIsEditingName(false);
+                    }
+                  }}
                 />
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 ml-1"
                   onClick={handleSaveName}
+                  disabled={isUpdatingName}
+                  title="Save name"
                 >
-                  <Check className="h-4 w-4" />
+                  {isUpdatingName ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 ml-1"
+                  onClick={() => {
+                    setNewPetName(pet.name);
+                    setIsEditingName(false);
+                  }}
+                  disabled={isUpdatingName}
+                  title="Cancel"
+                >
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
             ) : (
               <>
                 <span>{pet.name}</span>
-                <span>the Cat</span>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -555,6 +752,7 @@ export function VirtualPet() {
                     setNewPetName(pet.name);
                     setIsEditingName(true);
                   }}
+                  disabled={isUpdatingName}
                 >
                   <Edit2 className="h-3.5 w-3.5" />
                 </Button>

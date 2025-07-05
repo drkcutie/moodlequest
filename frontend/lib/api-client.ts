@@ -168,6 +168,7 @@ class ApiClient {
         },
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
+        credentials: "include", // This ensures cookies are sent with the request
       });
 
       // Connection completed, remove from pool

@@ -8,17 +8,29 @@ import { useGlobalXPReward } from "@/contexts/xp-reward-context";
 
 export function useDailyLoginQuest() {
   const { user } = useCurrentUser();
-  const { showXPReward, createRewardData } = useGlobalXPReward();
+  const { showXPReward, createRewardData, isOnboardingInProgress } =
+    useGlobalXPReward();
   const hasCompletedToday = useRef<string | null>(null);
 
   useEffect(() => {
     const completeLoginQuest = async () => {
       if (!user?.id) return;
 
+      // Wait for onboarding state to be determined before proceeding
+      if (isOnboardingInProgress) {
+        console.log("Daily login quest waiting for onboarding to complete...");
+        return;
+      }
+
       const today = new Date().toDateString();
 
       // Prevent multiple completion attempts on the same day
       if (hasCompletedToday.current === today) return;
+
+      console.log(
+        "Starting daily login quest completion for user:",
+        user.username
+      );
 
       try {
         // Ensure quest templates are seeded (this is idempotent)
@@ -61,7 +73,7 @@ export function useDailyLoginQuest() {
     const timer = setTimeout(completeLoginQuest, 2000);
 
     return () => clearTimeout(timer);
-  }, [user?.id]);
+  }, [user?.id, isOnboardingInProgress]); // Added isOnboardingInProgress to dependencies
 
   return null;
 }

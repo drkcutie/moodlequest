@@ -270,10 +270,14 @@ export async function POST(request: NextRequest) {
         response.cookies.set("moodleUser", JSON.stringify(finalUserData), {
           path: "/",
           maxAge: 60 * 60 * 24 * 7,
+          sameSite: "lax", // Allow cross-site requests in development
+          secure: false, // Allow non-HTTPS in development
         });
         response.cookies.set("moodleToken", token, {
           path: "/",
           maxAge: 60 * 60 * 24 * 7,
+          sameSite: "lax", // Allow cross-site requests in development
+          secure: false, // Allow non-HTTPS in development
         });
 
         return response;

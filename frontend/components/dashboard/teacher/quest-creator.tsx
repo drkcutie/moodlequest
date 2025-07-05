@@ -3,7 +3,7 @@
 import type React from "react";
 import { useCurrentUser } from "@/hooks/useCurrentMoodleUser";
 import { createQuest, QuestCreationResponse } from "@/lib/quest-service";
-import { useToast } from "@/hooks/use-toast";
+import toast from "react-hot-toast";
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -112,8 +112,6 @@ export function QuestCreator() {
     value: 0,
     name: "",
   });
-
-  const { toast } = useToast();
 
   // Task types for dropdown
   const TASK_TYPES = [
@@ -442,11 +440,7 @@ export function QuestCreator() {
     e.preventDefault();
 
     if (!selectedActivity) {
-      toast({
-        title: "No Activity Selected",
-        description: "Please select a Moodle activity first.",
-        variant: "destructive",
-      });
+      toast.error("Please select a Moodle activity first.");
       return;
     }
 
@@ -507,24 +501,19 @@ export function QuestCreator() {
       });
 
       if (!response || response.success === false) {
-        toast({
-          title: "Failed to create quest",
-          description:
-            response?.error ||
+        toast.error(
+          response?.error ||
             response?.message ||
-            "Unknown error. See console.",
-          variant: "destructive",
-        });
+            "Failed to create quest. See console for details."
+        );
         console.error("Quest creation error:", response);
         return;
       }
 
       // Success!
-      toast({
-        title: "Quest Assigned!",
-        description:
-          "Gamification elements successfully assigned to Moodle activity.",
-      });
+      toast.success(
+        "Quest assigned! Gamification elements successfully assigned to Moodle activity."
+      );
 
       // Mark activity as assigned in the mock data
       const updatedActivities = activities.map((activity) =>
@@ -548,12 +537,11 @@ export function QuestCreator() {
         rewards: [],
       });
     } catch (error: any) {
-      toast({
-        title: "Failed to assign quest",
-        description:
-          error?.error || error?.message || "Unknown error. See console.",
-        variant: "destructive",
-      });
+      toast.error(
+        error?.error ||
+          error?.message ||
+          "Failed to assign quest. See console for details."
+      );
       console.error("Quest creation error:", error);
     }
   };

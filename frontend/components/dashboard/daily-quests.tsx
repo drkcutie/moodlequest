@@ -14,7 +14,7 @@ import {
 } from "@/lib/api-client";
 import { useCurrentUser } from "@/hooks/useCurrentMoodleUser";
 import { useGlobalXPReward } from "@/contexts/xp-reward-context";
-import { toast } from "@/hooks/use-toast";
+import toast from "react-hot-toast";
 
 export function DailyQuests() {
   const { user } = useCurrentUser();
@@ -35,11 +35,7 @@ export function DailyQuests() {
         setQuestSummary(summary);
       } catch (error) {
         console.error("Failed to fetch daily quests:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load daily quests",
-          variant: "destructive",
-        });
+        toast.error("Failed to load daily quests");
       } finally {
         setLoading(false);
       }
@@ -71,29 +67,20 @@ export function DailyQuests() {
         } catch (error) {
           console.error("Failed to fetch progress for XP reward:", error);
           // Fallback to toast if progress fetch fails
-          toast({
-            title: "Quest Completed! 🎉",
-            description: `You earned ${result.xp_awarded} XP!`,
-          });
+          toast.success(
+            `Quest Completed! 🎉 You earned ${result.xp_awarded} XP!`
+          );
         }
 
         // Refresh quest summary
         const updatedSummary = await apiClient.getDailyQuestSummary(user.id);
         setQuestSummary(updatedSummary);
       } else {
-        toast({
-          title: "Quest Already Completed",
-          description: result.message,
-          variant: "default",
-        });
+        toast(`Quest Already Completed: ${result.message}`);
       }
     } catch (error) {
       console.error("Failed to complete quest:", error);
-      toast({
-        title: "Error",
-        description: "Failed to complete quest",
-        variant: "destructive",
-      });
+      toast.error("Failed to complete quest");
     } finally {
       setCompletingQuest(null);
     }

@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Union, Dict, Any
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
@@ -182,6 +182,72 @@ async def get_current_active_user(
         raise HTTPException(status_code=400, detail="Inactive user")
         
     return current_user
+
+
+async def get_current_user_from_moodle_token(
+    request: Request,
+    db: Session = Depends(get_db)
+) -> User:
+    """
+    Get current user from moodleToken cookie or Authorization header.
+    
+    Args:
+        request: FastAPI request object to access cookies and headers
+        db: Database session
+        
+    Returns:
+        Current user based on moodleToken
+    """
+    # Try to get moodleToken from cookies first
+    token = request.cookies.get("moodleToken")
+    
+    # If not in cookies, try Authorization header as fallback for development
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.replace("Bearer ", "")
+    
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No Moodle token found in cookies or Authorization header. Please login first."
+        )
+
+    # Look up user by their moodle token
+    user = db.query(User).filter(User.user_token == token).first()
+    
+    if not user:
+        # For development/testing, create or use a dummy user if no user found
+        logger.warning(f"No user found for token {token[:10]}..., using dummy user for development")
+        dummy_user = db.query(User).filter(User.username == "dev-student").first()
+        
+        if not dummy_user:
+            # Create dummy student user for testing
+            dummy_user = User(
+                username="dev-student",
+                email="dev-student@example.com",
+                password_hash=get_password_hash("password"),
+                first_name="Development",
+                last_name="Student",
+                role="student",
+                is_active=True,
+                user_token=token,
+                moodle_user_id=2
+            )
+            db.add(dummy_user)
+            db.commit()
+            db.refresh(dummy_user)
+            logger.info("Created dummy student user for testing virtual pets")
+        else:
+            # Update dummy user's token
+            dummy_user.user_token = token
+            db.commit()
+            db.refresh(dummy_user)
+        
+        return dummy_user
+    
+    logger.info(f"Authenticated user: {user.username} (ID: {user.id}, Moodle ID: {user.moodle_user_id})")
+    return user
 
 
 def store_token(

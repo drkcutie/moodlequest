@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { toast } from "@/hooks/use-toast";
+import { useAppToast } from "@/hooks/use-react-hot-toast";
 import { apiClient } from "@/lib/api-client";
 import { BadgeCreate, Badge as BadgeType } from "@/types/badges";
 import {
@@ -115,6 +115,7 @@ const CRITERIA_TYPES = [
 ];
 
 export function BadgeCreator({ onBadgeCreated, onCancel }: BadgeCreatorProps) {
+  const { success, error: showError } = useAppToast();
   const [formData, setFormData] = useState<BadgeCreate>({
     name: "",
     description: "",
@@ -184,11 +185,7 @@ export function BadgeCreator({ onBadgeCreated, onCancel }: BadgeCreatorProps) {
     e.preventDefault();
 
     if (!validateForm()) {
-      toast({
-        title: "Validation Error",
-        description: "Please fix the errors before submitting",
-        variant: "destructive",
-      });
+      showError("Please fix the errors before submitting");
       return;
     }
     setIsSubmitting(true);
@@ -202,19 +199,12 @@ export function BadgeCreator({ onBadgeCreated, onCancel }: BadgeCreatorProps) {
 
       const createdBadge = await apiClient.createBadge(badgeData);
 
-      toast({
-        title: "Badge Created",
-        description: `${formData.name} has been created successfully!`,
-      });
+      success(`${formData.name} has been created successfully!`);
 
       onBadgeCreated?.(createdBadge);
     } catch (error) {
       console.error("Failed to create badge:", error);
-      toast({
-        title: "Error",
-        description: "Failed to create badge. Please try again.",
-        variant: "destructive",
-      });
+      showError("Failed to create badge. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

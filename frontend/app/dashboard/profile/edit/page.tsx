@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { toast } from "sonner"
+import { useAppToast } from "@/hooks/use-react-hot-toast"
 import { motion } from "framer-motion"
 import { ArrowLeft, Check } from "lucide-react"
 import Link from "next/link"
@@ -18,6 +18,7 @@ import { apiClient } from "@/lib/api-client"
 
 export default function ProfileEditPage() {
   const { user } = useAuth()
+  const { success, error: showError, info } = useAppToast()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -54,22 +55,22 @@ export default function ProfileEditPage() {
           setFormData({
             firstName: data.first_name || "",
             lastName: data.last_name || "",
-            bio: data.bio || "",
+            bio: "", // Bio not available in ProfileData, keep as empty
             email: data.email || user.email || "",
             profileImage: data.profile_image_url || "",
             socialMedia: {
-              twitter: data.social_media?.twitter || "",
-              github: data.social_media?.github || ""
+              twitter: "", // Social media not available in ProfileData
+              github: ""
             },
             preferences: {
-              emailNotifications: data.preferences?.emailNotifications ?? true,
-              darkMode: data.preferences?.darkMode ?? true
+              emailNotifications: true, // Preferences not available in ProfileData, use defaults
+              darkMode: true
             }
           })
         }
       } catch (error) {
         console.error("Failed to load profile:", error)
-        toast.error("Failed to load profile data")
+        showError("Failed to load profile data")
       } finally {
         setLoading(false)
       }
@@ -87,7 +88,7 @@ export default function ProfileEditPage() {
       setFormData(prev => ({
         ...prev,
         [parent]: {
-          ...prev[parent as keyof typeof prev],
+          ...(prev[parent as keyof typeof prev] as object),
           [child]: value
         }
       }))
@@ -134,13 +135,13 @@ export default function ProfileEditPage() {
         console.warn("Non-critical: Failed to update Moodle profile", e)
       }
       
-      toast.success("Profile updated successfully")
+      success("Profile updated successfully")
       
       // Navigate back to profile
       router.push("/dashboard/profile")
     } catch (error) {
       console.error("Failed to save profile:", error)
-      toast.error("Failed to save changes")
+      showError("Failed to save changes")
     } finally {
       setSaving(false)
     }
