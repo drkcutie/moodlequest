@@ -40,21 +40,23 @@ export class LeaderboardService {
   /**
    * Get top students for a specific course
    */
-  async getCourseTopStudents(courseId: number, limit: number = 10): Promise<TopStudent[]> {
-    return await apiClient.request<TopStudent[]>(
-      `/leaderboard/top-students/course/${courseId}?limit=${limit}`,
-      'GET'
-    );
+  async getCourseTopStudents(courseId: number, limit: number = 10, timeframe?: TimeFrameOption): Promise<TopStudent[]> {
+    let endpoint = `/leaderboard/top-students/course/${courseId}?limit=${limit}`;
+    if (timeframe) {
+      endpoint += `&timeframe=${timeframe}`;
+    }
+    return await apiClient.request<TopStudent[]>(endpoint, 'GET');
   }
 
   /**
    * Get global top students across all courses
    */
-  async getGlobalTopStudents(limit: number = 20): Promise<TopStudent[]> {
-    return await apiClient.request<TopStudent[]>(
-      `/leaderboard/top-students/global?limit=${limit}`,
-      'GET'
-    );
+  async getGlobalTopStudents(limit: number = 20, timeframe?: TimeFrameOption): Promise<TopStudent[]> {
+    let endpoint = `/leaderboard/top-students/global?limit=${limit}`;
+    if (timeframe) {
+      endpoint += `&timeframe=${timeframe}`;
+    }
+    return await apiClient.request<TopStudent[]>(endpoint, 'GET');
   }
 
   /**
@@ -153,11 +155,11 @@ export class LeaderboardService {
 
       if (courseId) {
         // Get course-specific leaderboard
-        const topStudents = await this.getCourseTopStudents(courseId, limit);
+        const topStudents = await this.getCourseTopStudents(courseId, limit, timeframe);
         users = this.transformToLeaderboardUsers(topStudents);
       } else {
         // Get global leaderboard
-        const globalStudents = await this.getGlobalTopStudents(limit);
+        const globalStudents = await this.getGlobalTopStudents(limit, timeframe);
         users = this.transformToLeaderboardUsers(globalStudents);
       }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -15,7 +15,7 @@ import { StudentProgressAnalytics } from "@/components/dashboard/teacher/student
 import { ClassLeaderboard } from "@/components/dashboard/teacher/class-leaderboard";
 import { BadgeCreator } from "@/components/teacher/badge-creator";
 import { Badge as BadgeType } from "@/types/badges";
-import { Plus, Award, BarChart3 } from "lucide-react";
+import { Plus, Award, BarChart3, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -34,11 +34,43 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useTeacherDashboard } from "@/hooks/use-teacher-dashboard";
+import { TeacherDashboardService, RecentActivity } from "@/lib/teacher-dashboard-service";
 
 export function TeacherDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const [showQuestCreator, setShowQuestCreator] = useState(false);
   const [showBadgeCreator, setShowBadgeCreator] = useState(false);
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [activityLoading, setActivityLoading] = useState(true);
+
+  // Use teacher dashboard hook for real data
+  const {
+    data: dashboardData,
+    loading: dashboardLoading,
+    error: dashboardError,
+    refetch,
+  } = useTeacherDashboard({
+    timeRange: "week",
+    autoFetch: true,
+  });
+
+  // Fetch recent activity using the service
+  useEffect(() => {
+    const fetchRecentActivity = async () => {
+      setActivityLoading(true);
+      try {
+        const activities = await TeacherDashboardService.getRecentActivity(5);
+        setRecentActivity(activities);
+      } catch (error) {
+        console.error("Error fetching recent activity:", error);
+      } finally {
+        setActivityLoading(false);
+      }
+    };
+
+    fetchRecentActivity();
+  }, []);
 
   const handleBadgeCreated = (badge: BadgeType) => {
     console.log("Badge created:", badge);
@@ -60,17 +92,29 @@ export function TeacherDashboard() {
         <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100 shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg text-blue-700">
-              Active Students
+              Active Quests
             </CardTitle>
             <CardDescription className="text-blue-600/80">
-              Students online now
+              Quests you created that are currently active
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-blue-700">12 / 28</div>
-            <p className="text-sm text-blue-600/80">
-              43% of your class is currently active
-            </p>
+            {dashboardLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-blue-700" />
+              </div>
+            ) : dashboardError ? (
+              <div className="text-red-600 text-sm">Error loading data</div>
+            ) : (
+              <>
+                <div className="text-3xl font-bold text-blue-700">
+                  {dashboardData?.activeQuests.active || 0} / {dashboardData?.activeQuests.total || 0}
+                </div>
+                <p className="text-sm text-blue-600/80">
+                  {dashboardData?.activeQuests.nearDue || 0} quests due within 7 days
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-100 shadow-sm">
@@ -83,8 +127,22 @@ export function TeacherDashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-emerald-700">78%</div>
-            <p className="text-sm text-emerald-600/80">Up 12% from last week</p>
+            {dashboardLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-emerald-700" />
+              </div>
+            ) : dashboardError ? (
+              <div className="text-red-600 text-sm">Error loading data</div>
+            ) : (
+              <>
+                <div className="text-3xl font-bold text-emerald-700">
+                  {dashboardData?.questCompletion.rate.toFixed(1) || 0}%
+                </div>
+                <p className="text-sm text-emerald-600/80">
+                  {(dashboardData?.questCompletion.change || 0) >= 0 ? "Up" : "Down"} {Math.abs(dashboardData?.questCompletion.change || 0).toFixed(1)}% from last week
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-purple-100 shadow-sm">
@@ -97,13 +155,25 @@ export function TeacherDashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-purple-700">8.4 / 10</div>
-            <p className="text-sm text-purple-600/80">
-              Based on activity and quest completion
-            </p>
+            {dashboardLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-purple-700" />
+              </div>
+            ) : dashboardError ? (
+              <div className="text-red-600 text-sm">Error loading data</div>
+            ) : (
+              <>
+                <div className="text-3xl font-bold text-purple-700">
+                  {dashboardData?.engagementScore.score.toFixed(1) || 0} / {dashboardData?.engagementScore.maxScore || 10}
+                </div>
+                <p className="text-sm text-purple-600/80">
+                  Based on activity and quest completion
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
-      </div>{" "}
+      </div>
       {showQuestCreator ? (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
@@ -324,63 +394,32 @@ export function TeacherDashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-2 border-b">
-                    <div>
-                      <div className="font-medium">Sarah Johnson</div>
-                      <div className="text-sm text-muted-foreground">
-                        Completed "Algebra Basics" quest
-                      </div>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      10 minutes ago
-                    </div>
+                {activityLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-muted-foreground">Loading recent activity...</span>
                   </div>
-                  <div className="flex items-center justify-between p-2 border-b">
-                    <div>
-                      <div className="font-medium">Michael Rodriguez</div>
-                      <div className="text-sm text-muted-foreground">
-                        Started "Chemical Reactions" quest
-                      </div>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      25 minutes ago
-                    </div>
+                ) : recentActivity.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No recent activity found
                   </div>
-                  <div className="flex items-center justify-between p-2 border-b">
-                    <div>
-                      <div className="font-medium">Emily Chen</div>
-                      <div className="text-sm text-muted-foreground">
-                        Earned "Science Explorer" badge
+                ) : (
+                  <div className="space-y-4">
+                    {recentActivity.map((activity, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 border-b last:border-b-0">
+                        <div>
+                          <div className="font-medium">{activity.studentName}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {activity.action}
+                          </div>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {activity.timeAgo}
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      1 hour ago
-                    </div>
+                    ))}
                   </div>
-                  <div className="flex items-center justify-between p-2 border-b">
-                    <div>
-                      <div className="font-medium">James Wilson</div>
-                      <div className="text-sm text-muted-foreground">
-                        Completed 3 tasks in "Literary Analysis" quest
-                      </div>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      2 hours ago
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between p-2">
-                    <div>
-                      <div className="font-medium">David Chen</div>
-                      <div className="text-sm text-muted-foreground">
-                        Reached Level 5
-                      </div>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      3 hours ago
-                    </div>
-                  </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

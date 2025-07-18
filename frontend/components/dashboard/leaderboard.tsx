@@ -340,10 +340,10 @@ export function Leaderboard({ courseId, className }: LeaderboardProps) {
                       </Badge>
                     </div>
                   </div>
-                  <div className="h-28 mt-2 bg-gradient-to-t from-card/80 to-card/50 dark:from-card to-background border border-border/50 backdrop-blur-sm rounded-t-lg flex items-center justify-center px-4 shadow-lg">
+                  <div className="h-28 mt-2 bg-gradient-to-t from-card/80 to-background dark:from-card border border-border/50 backdrop-blur-sm rounded-t-lg flex items-center justify-center px-4 shadow-lg">
                     <div className="text-center">
                       <div className="font-medium text-2xl bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600 dark:text-primary/90">
-                        {displayedTopUsers[1].stats.exp_points}
+                        {displayedTopUsers[1]?.stats?.exp_points ?? 0}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         XP POINTS
@@ -399,7 +399,7 @@ export function Leaderboard({ courseId, className }: LeaderboardProps) {
                       </Badge>
                     </div>
                   </div>
-                  <div className="h-36 mt-2 bg-gradient-to-t from-card/80 to-card/50 dark:from-card to-background border border-border/50 backdrop-blur-sm rounded-t-lg flex items-center justify-center px-4 relative overflow-hidden shadow-lg">
+                  <div className="h-36 mt-2 bg-gradient-to-t from-card/80 to-card/50 dark:from-card border border-border/50 backdrop-blur-sm rounded-t-lg flex items-center justify-center px-4 relative overflow-hidden shadow-lg">
                     <div className="absolute inset-0 opacity-10 pointer-events-none">
                       <div className="absolute top-0 left-1/2 -translate-x-1/2 h-32 w-32 bg-yellow-500/30 rounded-full blur-3xl"></div>
                     </div>
@@ -454,7 +454,7 @@ export function Leaderboard({ courseId, className }: LeaderboardProps) {
                       </Badge>
                     </div>
                   </div>
-                  <div className="h-24 mt-2 bg-gradient-to-t from-card/80 to-card/50 dark:from-card to-background border border-border/50 backdrop-blur-sm rounded-t-lg flex items-center justify-center px-4 shadow-lg">
+                  <div className="h-24 mt-2 bg-gradient-to-t from-card/80 to-card/50 dark:from-card border border-border/50 backdrop-blur-sm rounded-t-lg flex items-center justify-center px-4 shadow-lg">
                     <div className="text-center">
                       <div className="font-medium text-2xl bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-green-600 dark:text-primary/90">
                         {displayedTopUsers[2].stats.exp_points}

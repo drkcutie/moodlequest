@@ -22,6 +22,7 @@ from app.schemas.leaderboard import (
     StudentProgressFilter,
     LeaderboardSummary
 )
+
 from app.crud.leaderboard import (
     create_leaderboard,
     get_leaderboard,
@@ -195,17 +196,20 @@ async def refresh_leaderboard_rankings(
         logger.error(f"Error refreshing leaderboard {leaderboard_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to refresh leaderboard")
 
+
 # Top Students Routes
 @router.get("/top-students/global", response_model=List[TopStudentResponse])
 async def get_global_leaderboard(
     limit: int = Query(20, description="Number of top students to return"),
+    timeframe: str = Query("all_time", description="Leaderboard time frame: daily, weekly, monthly, all_time"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Get global top students across all courses"""
+    """Get global top students across all courses, filtered by time frame"""
     try:
-        top_students = get_global_top_students(db, limit)
-        return [TopStudentResponse(**student) for student in top_students]
+        top_students = get_global_top_students(db, limit, timeframe)
+        result = [TopStudentResponse(**student) for student in top_students]
+        return result
     except Exception as e:
         logger.error(f"Error fetching global top students: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch global leaderboard")
@@ -214,15 +218,17 @@ async def get_global_leaderboard(
 async def get_course_leaderboard(
     course_id: int,
     limit: int = Query(10, description="Number of top students to return"),
+    timeframe: str = Query("all_time", description="Leaderboard time frame: daily, weekly, monthly, all_time"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Get top students for a specific course"""
+    """Get top students for a specific course, filtered by time frame"""
     try:
-        top_students = get_top_students_by_course(db, course_id, limit)
+        top_students = get_top_students_by_course(db, course_id, limit, timeframe)
         return [TopStudentResponse(**student) for student in top_students]
     except Exception as e:
         logger.error(f"Error fetching course leaderboard for course {course_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch course leaderboard")
         raise HTTPException(status_code=500, detail="Failed to fetch course leaderboard")
 
 @router.get("/course/{course_id}/summary", response_model=CourseLeaderboardResponse)

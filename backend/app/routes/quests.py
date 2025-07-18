@@ -13,6 +13,7 @@ from app.services.activity_log_service import log_activity
 from datetime import datetime
 import random
 from datetime import datetime, timedelta
+from app.utils.auth import get_current_user
 
 router = APIRouter(
     prefix="/quests",
@@ -56,6 +57,43 @@ def get_quests(
     
     quests = query.offset(skip).limit(limit).all()
     return quests
+
+@router.get("/my-quests", response_model=dict)
+def get_my_quests(db: Session = Depends(get_db)):
+    """
+    Get all quests created by the current authenticated user.
+    For now, returns quests for user ID 1 (dummy teacher).
+    """
+    from datetime import datetime
+    
+    user_id = 1  # Hardcode to user ID 1 for now
+    now = datetime.now()
+    
+    quests = db.query(Quest).filter(Quest.creator_id == user_id).all()
+    
+    # Convert to dict format that matches frontend expectations
+    quest_data = []
+    for quest in quests:
+        # Determine if quest is truly active (not past due date)
+        is_truly_active = quest.is_active
+        if quest.end_date:
+            # Remove timezone info for comparison if it exists
+            end_date = quest.end_date.replace(tzinfo=None) if quest.end_date.tzinfo else quest.end_date
+            if end_date < now:
+                is_truly_active = False  # Past due date, no longer active
+        
+        quest_data.append({
+            "quest_id": quest.quest_id,
+            "title": quest.title,
+            "is_active": is_truly_active,  # Use the calculated active status
+            "end_date": quest.end_date.isoformat() if quest.end_date else None,
+            "created_at": quest.created_at.isoformat() if quest.created_at else None
+        })
+    
+    return {
+        "success": True,
+        "data": quest_data
+    }
 
 @router.get("/{quest_id}", response_model=QuestSchema)
 def get_quest(quest_id: int, db: Session = Depends(get_db)):

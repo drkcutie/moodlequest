@@ -294,7 +294,6 @@ def calculate_engagement_scores(db: Session, course_id: Optional[int]) -> List[t
     return [(user_id, engagement_score) for user_id, engagement_score in results if engagement_score]
 
 # Top students functions
-def get_top_students_by_course(db: Session, course_id: int, limit: int = 10) -> List[Dict[str, Any]]:
     """Get top students for a specific course across all metrics"""
     # Get top students by experience points
     exp_query = db.query(
@@ -329,7 +328,50 @@ def get_top_students_by_course(db: Session, course_id: int, limit: int = 10) -> 
     
     return top_students
 
-def get_global_top_students(db: Session, limit: int = 20) -> List[Dict[str, Any]]:
+def get_top_students_by_course(db: Session, course_id: int, limit: int = 10, timeframe: str = "all_time") -> List[Dict[str, Any]]:
+    """Get top students for a specific course across all metrics, filtered by time frame"""
+    from datetime import datetime, timedelta
+    # Calculate date filter
+    now = datetime.utcnow()
+    if timeframe == "daily":
+        start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif timeframe == "weekly":
+        start_date = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    elif timeframe == "monthly":
+        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        start_date = None
+    exp_query = db.query(
+        StudentProgress.user_id,
+        StudentProgress.total_exp,
+        StudentProgress.quests_completed,
+        StudentProgress.badges_earned,
+        User.username,
+        User.first_name,
+        User.last_name,
+        User.profile_image_url
+    ).join(User, StudentProgress.user_id == User.id).filter(
+        StudentProgress.course_id == course_id
+    )
+    if start_date:
+        exp_query = exp_query.filter(StudentProgress.last_activity >= start_date)
+    exp_query = exp_query.order_by(desc(StudentProgress.total_exp)).limit(limit)
+    results = exp_query.all()
+    top_students = []
+    for i, (user_id, total_exp, quests_completed, badges_earned, username, first_name, last_name, profile_image_url) in enumerate(results, 1):
+        top_students.append({
+            "user_id": user_id,
+            "username": username,
+            "first_name": first_name,
+            "last_name": last_name,
+            "profile_image_url": profile_image_url,
+            "score": Decimal(str(total_exp)) if total_exp else Decimal('0'),
+            "rank": i,
+            "total_exp": total_exp,
+            "quests_completed": quests_completed,
+            "badges_earned": badges_earned
+        })
+    return top_students
     """Get global top students across all courses"""
     query = db.query(
         StudentProgress.user_id,
@@ -366,3 +408,50 @@ def get_global_top_students(db: Session, limit: int = 20) -> List[Dict[str, Any]
         })
     
     return top_students 
+def get_global_top_students(db: Session, limit: int = 20, timeframe: str = "all_time") -> List[Dict[str, Any]]:
+    """Get global top students across all courses, filtered by time frame"""
+    from datetime import datetime, timedelta
+    now = datetime.utcnow()
+    if timeframe == "daily":
+        start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif timeframe == "weekly":
+        start_date = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    elif timeframe == "monthly":
+        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        start_date = None
+    query = db.query(
+        StudentProgress.user_id,
+        func.sum(StudentProgress.total_exp).label('total_exp'),
+        func.sum(StudentProgress.quests_completed).label('total_quests'),
+        func.sum(StudentProgress.badges_earned).label('total_badges'),
+        User.username,
+        User.first_name,
+        User.last_name,
+        User.profile_image_url
+    ).join(User, StudentProgress.user_id == User.id)
+    if start_date:
+        query = query.filter(StudentProgress.last_activity >= start_date)
+    query = query.group_by(
+        StudentProgress.user_id,
+        User.username,
+        User.first_name,
+        User.last_name,
+        User.profile_image_url
+    ).order_by(desc('total_exp')).limit(limit)
+    results = query.all()
+    top_students = []
+    for i, (user_id, total_exp, total_quests, total_badges, username, first_name, last_name, profile_image_url) in enumerate(results, 1):
+        top_students.append({
+            "user_id": user_id,
+            "username": username,
+            "first_name": first_name,
+            "last_name": last_name,
+            "profile_image_url": profile_image_url,
+            "score": Decimal(str(total_exp)) if total_exp else Decimal('0'),
+            "rank": i,
+            "total_exp": total_exp,
+            "quests_completed": total_quests,
+            "badges_earned": total_badges
+        })
+    return top_students
